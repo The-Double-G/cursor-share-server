@@ -1,8 +1,18 @@
-const WebSocket = require('ws');
+const http = require("http");
+const WebSocket = require("ws");
+
 const port = process.env.PORT || 3000;
 
-const wss = new WebSocket.Server({ port });
+// Create HTTP server (required by Render)
+const server = http.createServer((req, res) => {
+  res.writeHead(200, { "Content-Type": "text/plain" });
+  res.end("WebSocket server is running");
+});
 
+// Attach WebSocket server to the HTTP server
+const wss = new WebSocket.Server({ server });
+
+// Lobby storage
 const lobbies = new Map();
 
 function joinLobby(code, ws) {
@@ -12,18 +22,18 @@ function joinLobby(code, ws) {
   const lobby = lobbies.get(code);
 
   if (lobby.clients.size >= 2) {
-    ws.send(JSON.stringify({ type: 'error', message: 'Lobby full' }));
+    ws.send(JSON.stringify({ type: "error", message: "Lobby full" }));
     return;
   }
 
   lobby.clients.add(ws);
   ws.lobbyCode = code;
 
-  ws.send(JSON.stringify({ type: 'joined', code, players: lobby.clients.size }));
+  ws.send(JSON.stringify({ type: "joined", code, players: lobby.clients.size }));
 
   for (const client of lobby.clients) {
     if (client !== ws && client.readyState === WebSocket.OPEN) {
-      client.send(JSON.stringify({ type: 'peer_joined' }));
+      client.send(JSON.stringify({ type: "peer_joined" }));
     }
   }
 }
@@ -37,7 +47,7 @@ function leaveLobby(ws) {
 
   for (const client of lobby.clients) {
     if (client.readyState === WebSocket.OPEN) {
-      client.send(JSON.stringify({ type: 'peer_left' }));
+      client.send(JSON.stringify({ type: "peer_left" }));
     }
   }
 
@@ -46,8 +56,8 @@ function leaveLobby(ws) {
   }
 }
 
-wss.on('connection', ws => {
-  ws.on('message', msg => {
+wss.on("connection", ws => {
+  ws.on("message", msg => {
     let data;
     try {
       data = JSON.parse(msg);
@@ -55,10 +65,10 @@ wss.on('connection', ws => {
       return;
     }
 
-    if (data.type === 'join') {
-      const code = String(data.code || '').trim();
+    if (data.type === "join") {
+      const code = String(data.code || "").trim();
       if (!/^\d{6}$/.test(code)) {
-        ws.send(JSON.stringify({ type: 'error', message: 'Invalid code' }));
+        ws.send(JSON.stringify({ type: "error", message: "Invalid code" }));
         return;
       }
       joinLobby(code, ws);
@@ -76,7 +86,9 @@ wss.on('connection', ws => {
     }
   });
 
-  ws.on('close', () => leaveLobby(ws));
+  ws.on("close", () => leaveLobby(ws));
 });
 
-console.log("WebSocket server running on port", port);
+server.listen(port, () => {
+  console.log("Server running on port", port);
+});
